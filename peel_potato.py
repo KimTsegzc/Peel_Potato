@@ -3,11 +3,12 @@ import time
 import xlwings as xw
 import os
 from PyQt6 import QtWidgets, QtCore, QtGui
+import peel_potato_prettify
 
 try:
     from win32com.client import constants as xlconst
 except Exception:
-    xlconst = None
+    xlconst = None  
 
 
 class PeelPotato(QtWidgets.QWidget):
@@ -83,10 +84,6 @@ class PeelPotato(QtWidgets.QWidget):
         self.values_input = QtWidgets.QLineEdit()
         self.values_input.setPlaceholderText("e.g. B2:B5 or B,C or B:C — support multiple values")
         form.addRow("Values:", self.values_input)
-
-        self.labels_input = QtWidgets.QLineEdit()
-        self.labels_input.setPlaceholderText("optional labels e.g. C2:C5 or C")
-        form.addRow("Labels (optional):", self.labels_input)
 
         # Multi-value mode (updated based on chart type)
         self.multi_mode = QtWidgets.QComboBox()
@@ -471,7 +468,6 @@ class PeelPotato(QtWidgets.QWidget):
         chart_type = self.chart_type.currentText()
         dim_text = self.dim_input.text().strip()
         values_text = self.values_input.text().strip()
-        labels_text = self.labels_input.text().strip()
 
         sheet = self.get_selected_sheet()
         if sheet is None:
@@ -510,8 +506,16 @@ class PeelPotato(QtWidgets.QWidget):
             # Create or reuse a chartobject
             chart = None
             if modify and hasattr(self, '_last_chart') and self._last_chart is not None:
-                chart = self._last_chart
-            else:
+                # Validate that the chart still exists
+                try:
+                    _ = self._last_chart.ChartType
+                    chart = self._last_chart
+                except Exception:
+                    # Chart no longer exists, set to None to create new
+                    chart = None
+                    self._last_chart = None
+            
+            if chart is None:
                 chart_objects = sht_api.ChartObjects()
                 chart_obj = chart_objects.Add(left, top, width, height)
                 chart = chart_obj.Chart
@@ -573,14 +577,6 @@ class PeelPotato(QtWidgets.QWidget):
                 series = chart.SeriesCollection().NewSeries()
                 series.XValues = x_range
                 series.Values = y_range
-                # optional labels
-                if labels_text:
-                    try:
-                        tags = sheet.range(labels_text).value if any(ch.isdigit() for ch in labels_text) or ':' in labels_text else sheet.range(labels_text)
-                        # best effort: set data labels
-                        series.HasDataLabels = True
-                    except Exception:
-                        pass
                 chart.ChartType = _xl.xlXYScatter
 
             else:
@@ -636,6 +632,9 @@ class PeelPotato(QtWidgets.QWidget):
             chart.HasTitle = True
             chart.ChartTitle.Text = f"{chart_type} — Peel Potato"
 
+            # Apply default formatting
+            peel_potato_prettify.apply_chart_formatting(chart)
+
             # remember last chart even when modifying
             try:
                 self._last_chart = chart
@@ -682,11 +681,62 @@ class PeelPotato(QtWidgets.QWidget):
             self.multi_mode.setEnabled(False)
 
     def on_change(self):
-        # Modify the last created chart in-place
-        if not hasattr(self, '_last_chart') or self._last_chart is None:
-            QtWidgets.QMessageBox.information(self, "No chart", "No existing chart to change. Use Create Chart first.")
-            return
-        self.create_chart(preview=False, modify=True)
+        # Modify the currently selected chart in Excel
+        try:
+            sheet = self.get_selected_sheet()
+            if sheet is None:
+                return
+            
+            # Try to get the selected chart
+            selected_chart = None
+            try:
+                app = xw.apps.active
+                if app is not None:
+                    selection = app.api.Selection
+                    
+                    # Try different ways to get the chart
+                    # 1. Selection might be a ChartObject directly
+                    try:
+                        if hasattr(selection, 'Chart'):
+                            selected_chart = selection.Chart
+                    except Exception:
+                        pass
+                    
+                    # 2. Selection might be a chart area (when clicking inside the chart)
+                    if selected_chart is None:
+                        try:
+                            if hasattr(selection, 'Parent') and hasattr(selection.Parent, 'ChartType'):
+                                selected_chart = selection.Parent
+                        except Exception:
+                            pass
+                    
+                    # 3. Try ActiveChart as fallback
+                    if selected_chart is None:
+                        try:
+                            active_chart = app.api.ActiveChart
+                            if active_chart is not None:
+                                selected_chart = active_chart
+                        except Exception:
+                            pass
+                    
+                    if selected_chart is not None:
+                        self._last_chart = selected_chart
+            except Exception:
+                pass
+            
+            if selected_chart is None:
+                QtWidgets.QMessageBox.warning(
+                    self, 
+                    "No chart selected", 
+                    "Please select a chart in Excel to modify, or use Create Chart to create a new one."
+                )
+                return
+            
+            # Modify the selected chart
+            self.create_chart(preview=False, modify=True)
+            
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to modify chart: {e}")
 
     def _chart_constant_for(self, chart_text, mode_text, _xl):
         # Map chart type + mode to Excel ChartType constant
