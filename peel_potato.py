@@ -22,11 +22,8 @@ class PeelPotato(QtWidgets.QWidget):
         try:
             icon_dir = os.path.dirname(__file__)
             candidates = [
-                os.path.join(icon_dir, 'icon_60.png'),
-                os.path.join(icon_dir, 'icon_60x60.png'),
-                os.path.join(icon_dir, 'icon_60x60.svg'),
-                os.path.join(icon_dir, 'icon_60.svg'),
-                os.path.join(icon_dir, 'icon.png'),
+                os.path.join(icon_dir, 'Icon_app.ico'),
+                os.path.join(icon_dir, 'Icon_high_res.ico'),
             ]
             for icon_path in candidates:
                 if os.path.exists(icon_path):
