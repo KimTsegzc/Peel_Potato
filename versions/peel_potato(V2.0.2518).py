@@ -104,10 +104,7 @@ class PeelPotato(QtWidgets.QWidget):
 
         # poll for active workbook/sheet and auto-refresh status
         self.poll_timer = QtCore.QTimer(self)
-        # Use a less aggressive poll interval to avoid interfering with Excel editing
-        self._poll_interval_default = 5000  # ms
-        self.poll_timer.setInterval(self._poll_interval_default)
-        self._poll_backoff_count = 0
+        self.poll_timer.setInterval(1500)  # ms
         self.poll_timer.timeout.connect(self.locate_active_sheet)
         self.poll_timer.start()
         # initial locate shortly after show
@@ -235,23 +232,6 @@ class PeelPotato(QtWidgets.QWidget):
                     self.active_label.setText("(no workbook)")
                     self.load_label.setText("No workbook")
             except Exception:
-                # If a COM call failed while probing the workbook/sheet, it may be
-                # because Excel is busy or the user is editing a formula. Treat
-                # common "call rejected" / busy patterns as a transient busy state
-                # and avoid spamming COM requests.
-                try:
-                    import traceback
-                    exc = traceback.format_exc()
-                    low = exc.lower()
-                    if 'call was rejected by callee' in exc or 'call was rejected' in low or 'rpc' in low or 'busy' in low:
-                        try:
-                            self.active_label.setText("(excel busy)")
-                            self.load_label.setText("Excel busy")
-                        except Exception:
-                            pass
-                        return
-                except Exception:
-                    pass
                 self.active_label.setText("(error)")
                 self.load_label.setText("Error")
 
@@ -570,53 +550,6 @@ class PeelPotato(QtWidgets.QWidget):
 
             # COM objects
             sht_api = sheet.api
-            # Optimize Excel during heavy operations to reduce UI blocking and
-            # avoid triggering recalculation while we build chart objects.
-            app_api = None
-            _excel_saved = {}
-            try:
-                try:
-                    app_api = sht_api.Application
-                    try:
-                        _excel_saved['ScreenUpdating'] = app_api.ScreenUpdating
-                    except Exception:
-                        _excel_saved['ScreenUpdating'] = None
-                    try:
-                        _excel_saved['EnableEvents'] = app_api.EnableEvents
-                    except Exception:
-                        _excel_saved['EnableEvents'] = None
-                    try:
-                        _excel_saved['DisplayAlerts'] = app_api.DisplayAlerts
-                    except Exception:
-                        _excel_saved['DisplayAlerts'] = None
-                    try:
-                        _excel_saved['Calculation'] = app_api.Calculation
-                    except Exception:
-                        _excel_saved['Calculation'] = None
-
-                    # Apply safe performance-friendly settings
-                    try:
-                        app_api.ScreenUpdating = False
-                    except Exception:
-                        pass
-                    try:
-                        app_api.EnableEvents = False
-                    except Exception:
-                        pass
-                    try:
-                        app_api.DisplayAlerts = False
-                    except Exception:
-                        pass
-                    try:
-                        manual_calc = getattr(xlconst, 'xlCalculationManual', -4135) if xlconst is not None else -4135
-                        app_api.Calculation = manual_calc
-                    except Exception:
-                        pass
-                    self._log("Temporarily disabled Excel UI updates and set manual calculation for performance")
-                except Exception:
-                    app_api = None
-            except Exception:
-                app_api = None
             # place chart at fixed position
             left = 50
             top = 20
@@ -809,35 +742,6 @@ class PeelPotato(QtWidgets.QWidget):
             self._show_potato_error("Chart operation", e)
             self._set_status("", busy=False)
         finally:
-            # Restore Excel UI and calculation settings if we changed them
-            try:
-                if 'app_api' in locals() and app_api is not None and isinstance(_excel_saved, dict):
-                    try:
-                        if _excel_saved.get('ScreenUpdating') is not None:
-                            app_api.ScreenUpdating = _excel_saved.get('ScreenUpdating')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('EnableEvents') is not None:
-                            app_api.EnableEvents = _excel_saved.get('EnableEvents')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('DisplayAlerts') is not None:
-                            app_api.DisplayAlerts = _excel_saved.get('DisplayAlerts')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('Calculation') is not None:
-                            app_api.Calculation = _excel_saved.get('Calculation')
-                    except Exception:
-                        pass
-                    try:
-                        self._log("Restored Excel UI/Calculation settings")
-                    except Exception:
-                        pass
-            except Exception:
-                pass
             # clear status and restore cursor
             self._set_status("", busy=False)
 

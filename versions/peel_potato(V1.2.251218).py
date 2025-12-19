@@ -16,18 +16,17 @@ class PeelPotato(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Peel Potato — FastBI for Excel")
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
-        self.setFixedWidth(420)
-        
-        # Set base font: 12pt Microsoft YaHei UI
-        base_font = QtGui.QFont("Microsoft YaHei UI", 12)
-        self.setFont(base_font)
+        self.resize(420, 220)
 
         # set window icon from project icon (prefer 60x60 variants) if available
         try:
             icon_dir = os.path.dirname(__file__)
             candidates = [
-                os.path.join(icon_dir, 'Icon_app.ico'),
-                os.path.join(icon_dir, 'Icon_high_res.ico'),
+                os.path.join(icon_dir, 'icon_60.png'),
+                os.path.join(icon_dir, 'icon_60x60.png'),
+                os.path.join(icon_dir, 'icon_60x60.svg'),
+                os.path.join(icon_dir, 'icon_60.svg'),
+                os.path.join(icon_dir, 'icon.png'),
             ]
             for icon_path in candidates:
                 if os.path.exists(icon_path):
@@ -50,21 +49,8 @@ class PeelPotato(QtWidgets.QWidget):
             pass
 
         layout = QtWidgets.QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)  # Set consistent margins
-        layout.setSpacing(8)  # Reduce spacing between elements
 
         form = QtWidgets.QFormLayout()
-        
-        # Active workbook/sheet notification (read-only) - 10pt font
-        self.active_label = QtWidgets.QLabel("(no Excel detected)")
-        active_font = QtGui.QFont("Microsoft YaHei UI", 10)
-        self.active_label.setFont(active_font)
-        form.addRow("Active at:", self.active_label)
-
-        # Loading / status indicator - 10pt font
-        self.load_label = QtWidgets.QLabel("")
-        self.load_label.setFont(active_font)
-        form.addRow("Status:", self.load_label)
 
         self.chart_type = QtWidgets.QComboBox()
         # More chart types and clearer labels
@@ -78,24 +64,30 @@ class PeelPotato(QtWidgets.QWidget):
             "Radar",
         ])
         self.chart_type.currentTextChanged.connect(self.on_chart_type_changed)
-        form.addRow("Type:", self.chart_type)
+        form.addRow("Chart type:", self.chart_type)
+
+        # Active workbook/sheet notification (read-only)
+        self.active_label = QtWidgets.QLabel("(no Excel detected)")
+        self.active_label.setStyleSheet("font-weight: bold")
+        form.addRow("Active workbook/sheet:", self.active_label)
+
+        # Loading / status indicator
+        self.load_label = QtWidgets.QLabel("")
+        self.load_label.setStyleSheet("color: #666; font-size: 11px")
+        form.addRow("Status:", self.load_label)
 
         # New: clearer inputs
         self.dim_input = QtWidgets.QLineEdit()
-        self.dim_input.setPlaceholderText("e.g. A2:A5 or A")
-        dim_label = QtWidgets.QLabel("<b>Dim(X):</b>")
-        dim_label.setStyleSheet("color: #d35400; font-size: 12pt;")
-        form.addRow(dim_label, self.dim_input)
+        self.dim_input.setPlaceholderText("e.g. A2:A5 or A (header will be used) — category / X")
+        form.addRow("Dim (category / X):", self.dim_input)
 
         self.values_input = QtWidgets.QLineEdit()
-        self.values_input.setPlaceholderText("e.g. B2:B5 or B,C or (B,C)*(7:10)")
-        values_label = QtWidgets.QLabel("<b>Values:</b>")
-        values_label.setStyleSheet("color: #d35400; font-size: 12pt;")
-        form.addRow(values_label, self.values_input)
+        self.values_input.setPlaceholderText("e.g. B2:B5 or B,C or B:C — support multiple values")
+        form.addRow("Values:", self.values_input)
 
         # Multi-value mode (updated based on chart type)
         self.multi_mode = QtWidgets.QComboBox()
-        form.addRow("Multi mode:", self.multi_mode)
+        form.addRow("Multi-series mode:", self.multi_mode)
 
         layout.addLayout(form)
 
@@ -104,33 +96,20 @@ class PeelPotato(QtWidgets.QWidget):
 
         # poll for active workbook/sheet and auto-refresh status
         self.poll_timer = QtCore.QTimer(self)
-        # Use a less aggressive poll interval to avoid interfering with Excel editing
-        self._poll_interval_default = 5000  # ms
-        self.poll_timer.setInterval(self._poll_interval_default)
-        self._poll_backoff_count = 0
+        self.poll_timer.setInterval(1500)  # ms
         self.poll_timer.timeout.connect(self.locate_active_sheet)
         self.poll_timer.start()
         # initial locate shortly after show
         QtCore.QTimer.singleShot(100, self.locate_active_sheet)
 
         btn_layout = QtWidgets.QHBoxLayout()
-        btn_layout.setSpacing(5)  # Reduce spacing between buttons
-        btn_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
-        
-        # Help button
-        self.help_btn = QtWidgets.QPushButton("?")
-        self.help_btn.setMaximumWidth(40)
-        self.help_btn.clicked.connect(self.on_help)
-        btn_layout.addWidget(self.help_btn)
-        
         # Create / Change chart buttons only (workbook/sheet selection removed)
-        self.create_btn = QtWidgets.QPushButton("Create ↵")
+        self.create_btn = QtWidgets.QPushButton("Create Chart")
         self.create_btn.clicked.connect(self.on_create)
-        self.create_btn.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Return))
         btn_layout.addWidget(self.create_btn)
 
         # Change (modify existing) button
-        self.change_btn = QtWidgets.QPushButton("Change")
+        self.change_btn = QtWidgets.QPushButton("Change Chart")
         self.change_btn.clicked.connect(self.on_change)
         btn_layout.addWidget(self.change_btn)
 
@@ -138,51 +117,10 @@ class PeelPotato(QtWidgets.QWidget):
 
         # status / loading label
         self.status_label = QtWidgets.QLabel("")
+        self.status_label.setStyleSheet("color: #333; font-size: 11px")
         layout.addWidget(self.status_label)
-        
-        # Log/Notice board with toggle button
-        log_header_layout = QtWidgets.QHBoxLayout()
-        self.log_toggle_btn = QtWidgets.QPushButton("▶")
-        self.log_toggle_btn.setMaximumWidth(30)
-        self.log_toggle_btn.setFlat(True)
-        self.log_toggle_btn.clicked.connect(self.toggle_log)
-        log_font = QtGui.QFont("Times New Roman", 10)
-        self.log_toggle_btn.setFont(log_font)
-        log_header_layout.addWidget(self.log_toggle_btn)
-        
-        log_label = QtWidgets.QLabel("Log:")
-        log_label.setFont(log_font)
-        log_label.setStyleSheet("color: #555;")
-        log_header_layout.addWidget(log_label)
-        log_header_layout.addStretch()
-        layout.addLayout(log_header_layout)
-        
-        self.log_board = QtWidgets.QTextEdit()
-        self.log_board.setReadOnly(True)
-        self.log_board.setFixedHeight(140)
-        self.log_board.setFont(log_font)
-        self.log_board.setStyleSheet("background-color: #f9f9f9; color: #555;")
-        self.log_board.hide()  # Start with log hidden
-        layout.addWidget(self.log_board)
 
         self.setLayout(layout)
-        
-        # Adjust window size to fit content (log is hidden initially)
-        self.adjustSize()
-        
-        # Log initial message
-        self._log("Peel Potato initialized. Ready to create charts!")
-
-    def toggle_log(self):
-        """Toggle log board visibility."""
-        if self.log_board.isVisible():
-            self.log_board.hide()
-            self.log_toggle_btn.setText("▶")
-        else:
-            self.log_board.show()
-            self.log_toggle_btn.setText("▼")
-        # Let Qt automatically adjust the window height based on visible content
-        QtCore.QTimer.singleShot(0, lambda: self.adjustSize())
 
     def locate_active_sheet(self):
         """Update the active_label and load_label with the currently focused workbook and sheet."""
@@ -235,23 +173,6 @@ class PeelPotato(QtWidgets.QWidget):
                     self.active_label.setText("(no workbook)")
                     self.load_label.setText("No workbook")
             except Exception:
-                # If a COM call failed while probing the workbook/sheet, it may be
-                # because Excel is busy or the user is editing a formula. Treat
-                # common "call rejected" / busy patterns as a transient busy state
-                # and avoid spamming COM requests.
-                try:
-                    import traceback
-                    exc = traceback.format_exc()
-                    low = exc.lower()
-                    if 'call was rejected by callee' in exc or 'call was rejected' in low or 'rpc' in low or 'busy' in low:
-                        try:
-                            self.active_label.setText("(excel busy)")
-                            self.load_label.setText("Excel busy")
-                        except Exception:
-                            pass
-                        return
-                except Exception:
-                    pass
                 self.active_label.setText("(error)")
                 self.load_label.setText("Error")
 
@@ -312,17 +233,6 @@ class PeelPotato(QtWidgets.QWidget):
                 QtWidgets.QApplication.restoreOverrideCursor()
         except Exception:
             pass
-    
-    def _log(self, message):
-        """Append a message to the log board."""
-        try:
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-            self.log_board.append(f"[{timestamp}] {message}")
-            # Auto-scroll to bottom
-            self.log_board.verticalScrollBar().setValue(self.log_board.verticalScrollBar().maximum())
-        except Exception:
-            pass
 
     def _col_letter_to_index(self, letter):
         # Convert column letter(s) like 'A' or 'AA' to 1-based index
@@ -340,110 +250,11 @@ class PeelPotato(QtWidgets.QWidget):
           - single range like B2:B5
           - range span like B:C
           - comma separated columns like B,C (if ref_rows provided the rows will be applied)
-          - Cartesian product format like (B,E)*(2,7) or (B:E)*(2:7)
-            - Use , for specific items: B,E means just B and E
-            - Use : for continuous range: B:E means B, C, D, E
         This function avoids including the header row by default: it uses UsedRange.Row + 1 as data start.
         """
         values_text = values_text.strip()
         if not values_text:
             return []
-        
-        # Check for Cartesian product format: (cols) * (rows)
-        import re
-        cartesian_pattern = r'\(([^)]+)\)\s*\*\s*\(([^)]+)\)'
-        cartesian_match = re.match(cartesian_pattern, values_text)
-        
-        if cartesian_match:
-            # Parse Cartesian product format
-            cols_str = cartesian_match.group(1).strip()
-            rows_str = cartesian_match.group(2).strip()
-            
-            # Parse columns: supports both "B,E" (specific) and "B:E" (continuous range)
-            cols = []
-            if ':' in cols_str and ',' not in cols_str:
-                # Continuous range like B:E
-                col_parts = [c.strip().upper() for c in cols_str.split(':')]
-                if len(col_parts) == 2:
-                    start_col_idx = self._col_letter_to_index(col_parts[0])
-                    end_col_idx = self._col_letter_to_index(col_parts[1])
-                    if start_col_idx and end_col_idx:
-                        # Generate all columns from start to end
-                        for col_idx in range(start_col_idx, end_col_idx + 1):
-                            # Convert index back to letter
-                            col_letter = ''
-                            idx = col_idx
-                            while idx > 0:
-                                idx, remainder = divmod(idx - 1, 26)
-                                col_letter = chr(65 + remainder) + col_letter
-                            cols.append(col_letter)
-            else:
-                # Comma-separated (may also have ranges): B,C or B:C,E
-                for part in cols_str.split(','):
-                    part = part.strip().upper()
-                    if ':' in part:
-                        # Range within comma-separated list
-                        col_parts = [c.strip().upper() for c in part.split(':')]
-                        if len(col_parts) == 2:
-                            start_col_idx = self._col_letter_to_index(col_parts[0])
-                            end_col_idx = self._col_letter_to_index(col_parts[1])
-                            if start_col_idx and end_col_idx:
-                                for col_idx in range(start_col_idx, end_col_idx + 1):
-                                    col_letter = ''
-                                    idx = col_idx
-                                    while idx > 0:
-                                        idx, remainder = divmod(idx - 1, 26)
-                                        col_letter = chr(65 + remainder) + col_letter
-                                    cols.append(col_letter)
-                    else:
-                        cols.append(part)
-            
-            # Parse rows: supports both "2,7" (specific) and "2:7" (continuous range)
-            rows = []
-            if ':' in rows_str and ',' not in rows_str:
-                # Continuous range like 2:7
-                row_parts = rows_str.split(':')
-                try:
-                    start_row = int(row_parts[0].strip())
-                    end_row = int(row_parts[1].strip())
-                    rows = list(range(start_row, end_row + 1))
-                except ValueError:
-                    pass
-            else:
-                # Comma-separated (may also have ranges): 2,7 or 2:5,7
-                for part in rows_str.split(','):
-                    part = part.strip()
-                    if ':' in part:
-                        # Range within comma-separated list
-                        row_parts = part.split(':')
-                        try:
-                            start_row = int(row_parts[0].strip())
-                            end_row = int(row_parts[1].strip())
-                            rows.extend(range(start_row, end_row + 1))
-                        except ValueError:
-                            pass
-                    else:
-                        try:
-                            rows.append(int(part))
-                        except ValueError:
-                            pass
-            
-            # Build ranges for each column-row combination
-            if cols and rows:
-                ranges = []
-                for col in cols:
-                    col_idx = self._col_letter_to_index(col)
-                    if col_idx:
-                        try:
-                            # Create range for this column spanning all specified rows
-                            start_row = min(rows)
-                            end_row = max(rows)
-                            ranges.append(sheet.range((start_row, col_idx), (end_row, col_idx)))
-                        except Exception:
-                            pass
-                return ranges
-        
-        # Regular parsing (backward compatible)
         parts = [p.strip() for p in values_text.split(',') if p.strip()]
         ranges = []
         # determine used rows for the sheet when available
@@ -535,26 +346,135 @@ class PeelPotato(QtWidgets.QWidget):
             return None
         return api.Range(api.Cells(min_row, min_col), api.Cells(max_row, max_col))
 
+    def on_preview(self):
+        self.create_chart(preview=True)
+
     def on_create(self):
         self.create_chart(preview=False)
 
-    def create_chart(self, preview=True, modify=False):
-        try:
-            chart_type = self.chart_type.currentText()
-            dim_text = self.dim_input.text().strip()
-            values_text = self.values_input.text().strip()
+    def on_create_pivot(self):
+        self.create_pivot()
 
-            sheet = self.get_selected_sheet()
-            if sheet is None:
-                return
-
-            # show busy status and cursor while chart is created
-            self._set_status("Creating chart…", busy=True)
-        except Exception as e:
-            self._show_potato_error("Chart creation", e)
-            self._set_status("", busy=False)
+    def create_pivot(self):
+        sheet = self.get_selected_sheet()
+        if sheet is None:
             return
-        
+        # show busy status
+        self._set_status("Creating pivot…", busy=True)
+        dim_text = self.dim_input.text().strip()
+        values_text = self.values_input.text().strip()
+        if not dim_text or not values_text:
+            QtWidgets.QMessageBox.warning(self, "Input required", "Pivot needs Dim and Values inputs.")
+            return
+        try:
+            # parse dim to get rows
+            dim_range = sheet.range(dim_text) if (any(ch.isdigit() for ch in dim_text) or ':' in dim_text) else None
+        except Exception:
+            dim_range = None
+        # If dim_range has rows, get start/end row
+        ref_rows = None
+        if dim_range is not None:
+            ra = dim_range.api
+            ref_rows = (ra.Row, ra.Row + ra.Rows.Count - 1)
+
+        value_ranges = self._parse_values_input(values_text, sheet, ref_rows=ref_rows)
+        if not value_ranges:
+            QtWidgets.QMessageBox.warning(self, "Input error", "Could not parse Values input.")
+            return
+
+        # Build source block from dim + value ranges (include headers row)
+        all_ranges = []
+        if dim_range is not None:
+            all_ranges.append(dim_range)
+        else:
+            # if dim_text is a column letter like A, try to construct via ref_rows
+            if ref_rows:
+                col_letter = dim_text.strip()
+                col_idx = self._col_letter_to_index(col_letter)
+                if col_idx:
+                    all_ranges.append(sheet.range((ref_rows[0], col_idx), (ref_rows[1], col_idx)))
+        all_ranges.extend(value_ranges)
+
+        source_com_range = self._compute_source_block(sheet, all_ranges)
+        if source_com_range is None:
+            QtWidgets.QMessageBox.warning(self, "Error", "Could not determine source range for pivot.")
+            return
+
+        # Expand pivot source to include all contiguous used columns to the right (auto-select all columns)
+        try:
+            used = sheet.api.UsedRange
+            used_last_row = used.Row + used.Rows.Count - 1
+            used_last_col = used.Column + used.Columns.Count - 1
+            header_row = source_com_range.Row
+            first_col = source_com_range.Column
+            # build expanded source to include all used cols up to used_last_col
+            source_com_range = sheet.api.Range(sheet.api.Cells(header_row, first_col), sheet.api.Cells(used_last_row, used_last_col))
+        except Exception:
+            pass
+
+        # Determine destination: far right of the source block + 2 columns
+        src_cols = source_com_range.Columns.Count
+        src_rows = source_com_range.Rows.Count
+        src_first_col = source_com_range.Column
+        src_last_col = src_first_col + src_cols - 1
+        dest_col = src_last_col + 2
+        dest_cell = sheet.api.Cells(1, dest_col)
+
+        # Create pivot cache and table
+        wb_api = self._current_book.api if hasattr(self, '_current_book') else sheet.book.api
+        if xlconst is None:
+            from win32com.client import constants as xlconst_local
+            _xl = xlconst_local
+        else:
+            _xl = xlconst
+
+        try:
+            pc = wb_api.PivotCaches().Create(SourceType=_xl.xlDatabase, SourceData=source_com_range)
+            name = f"PeelPotatoPivot_{int(time.time())}"
+            pt = pc.CreatePivotTable(TableDestination=dest_cell, TableName=name)
+
+            # Add fields: assume first column is Dim, remaining are Values
+            header_row = source_com_range.Row
+            first_col = source_com_range.Column
+            last_col = src_last_col
+            # Row field:
+            dim_field_name = sheet.api.Cells(header_row, first_col).Value
+            try:
+                pt.PivotFields(dim_field_name).Orientation = _xl.xlRowField
+            except Exception:
+                pass
+
+            # Data fields (default aggregation: Sum)
+            func = _xl.xlSum
+            for col in range(first_col + 1, last_col + 1):
+                fld_name = sheet.api.Cells(header_row, col).Value
+                try:
+                    pt.AddDataField(pt.PivotFields(fld_name), f"Sum of {fld_name}", func)
+                except Exception:
+                    try:
+                        # fallback: set orientation and use default
+                        pt.PivotFields(fld_name).Orientation = _xl.xlDataField
+                    except Exception:
+                        pass
+
+            QtWidgets.QMessageBox.information(self, "Pivot created", f"Pivot table '{name}' created at column {dest_col}.")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Pivot error", str(e))
+        finally:
+            # clear busy status
+            self._set_status("", busy=False)
+
+    def create_chart(self, preview=True, modify=False):
+        chart_type = self.chart_type.currentText()
+        dim_text = self.dim_input.text().strip()
+        values_text = self.values_input.text().strip()
+
+        sheet = self.get_selected_sheet()
+        if sheet is None:
+            return
+
+        # show busy status and cursor while chart is created
+        self._set_status("Creating chart…", busy=True)
         try:
             # Validate inputs
             ct_lower = chart_type.lower()
@@ -570,53 +490,6 @@ class PeelPotato(QtWidgets.QWidget):
 
             # COM objects
             sht_api = sheet.api
-            # Optimize Excel during heavy operations to reduce UI blocking and
-            # avoid triggering recalculation while we build chart objects.
-            app_api = None
-            _excel_saved = {}
-            try:
-                try:
-                    app_api = sht_api.Application
-                    try:
-                        _excel_saved['ScreenUpdating'] = app_api.ScreenUpdating
-                    except Exception:
-                        _excel_saved['ScreenUpdating'] = None
-                    try:
-                        _excel_saved['EnableEvents'] = app_api.EnableEvents
-                    except Exception:
-                        _excel_saved['EnableEvents'] = None
-                    try:
-                        _excel_saved['DisplayAlerts'] = app_api.DisplayAlerts
-                    except Exception:
-                        _excel_saved['DisplayAlerts'] = None
-                    try:
-                        _excel_saved['Calculation'] = app_api.Calculation
-                    except Exception:
-                        _excel_saved['Calculation'] = None
-
-                    # Apply safe performance-friendly settings
-                    try:
-                        app_api.ScreenUpdating = False
-                    except Exception:
-                        pass
-                    try:
-                        app_api.EnableEvents = False
-                    except Exception:
-                        pass
-                    try:
-                        app_api.DisplayAlerts = False
-                    except Exception:
-                        pass
-                    try:
-                        manual_calc = getattr(xlconst, 'xlCalculationManual', -4135) if xlconst is not None else -4135
-                        app_api.Calculation = manual_calc
-                    except Exception:
-                        pass
-                    self._log("Temporarily disabled Excel UI updates and set manual calculation for performance")
-                except Exception:
-                    app_api = None
-            except Exception:
-                app_api = None
             # place chart at fixed position
             left = 50
             top = 20
@@ -651,7 +524,6 @@ class PeelPotato(QtWidgets.QWidget):
 
             # Determine Excel chart constant and set type before adding series
             chart_const = self._chart_constant_for(chart_type, self.multi_mode.currentText(), _xl)
-            self._log(f"Creating {chart_type} chart with {self.multi_mode.currentText()} mode")
             try:
                 chart.ChartType = chart_const
             except Exception:
@@ -659,7 +531,6 @@ class PeelPotato(QtWidgets.QWidget):
 
             # Build ranges for dim and values (support multi-values)
             # dim_range
-            self._log(f"Parsing Dim input: {dim_text}")
             try:
                 dim_range = sheet.range(dim_text) if (any(ch.isdigit() for ch in dim_text) or ':' in dim_text) else None
             except Exception:
@@ -669,12 +540,7 @@ class PeelPotato(QtWidgets.QWidget):
                 dra = dim_range.api
                 ref_rows = (dra.Row, dra.Row + dra.Rows.Count - 1)
 
-            self._log(f"Parsing Values input: {values_text}")
             value_ranges = self._parse_values_input(values_text, sheet, ref_rows=ref_rows)
-            
-            # Log detected value names
-            if value_ranges:
-                self._log(f"Found {len(value_ranges)} value range(s)")
 
             # If dim was provided as a column letter (e.g. 'A') build dim_range from value rows or used range
             if dim_range is None and dim_text and dim_text.strip().isalpha():
@@ -695,24 +561,6 @@ class PeelPotato(QtWidgets.QWidget):
                             dim_range = sheet.range((ref_rows[0], col_idx), (ref_rows[1], col_idx))
                         except Exception:
                             dim_range = None
-
-            # Now detect and log all names (after dim_range is fully built)
-            if dim_range:
-                try:
-                    dim_name = peel_potato_prettify.reset_title_name(dim_range)
-                    if dim_name:
-                        self._log(f"✓ Dim name: <b>{dim_name}</b>")
-                except Exception:
-                    pass
-            
-            if value_ranges:
-                for idx, vr in enumerate(value_ranges):
-                    try:
-                        value_name = peel_potato_prettify.reset_title_name(vr)
-                        if value_name:
-                            self._log(f"  ✓ Value {idx+1}: <b>{value_name}</b>")
-                    except Exception:
-                        pass
 
             # ...histogram support removed. Other chart types handled below.
 
@@ -784,17 +632,8 @@ class PeelPotato(QtWidgets.QWidget):
             chart.HasTitle = True
             chart.ChartTitle.Text = f"{chart_type} — Peel Potato"
 
-            # Apply default formatting with dim and value ranges for auto-naming
-            names_result = peel_potato_prettify.apply_chart_formatting(chart, dim_range, value_ranges)
-            
-            # Display the detected names prominently
-            if names_result and names_result[0] and names_result[1]:
-                dim_name, value_names = names_result
-                self._log(f"📊 Chart title set: <b>{value_names[0]} by {dim_name}</b>")
-            
-            # Log completion
-            action = "modified" if modify else "created"
-            self._log(f"Chart {action} successfully! Applied formatting.")
+            # Apply default formatting
+            peel_potato_prettify.apply_chart_formatting(chart)
 
             # remember last chart even when modifying
             try:
@@ -806,38 +645,9 @@ class PeelPotato(QtWidgets.QWidget):
             # Keep the created chart embedded where preview showed it.
 
         except Exception as e:
-            self._show_potato_error("Chart operation", e)
+            QtWidgets.QMessageBox.critical(self, "Chart error", str(e))
             self._set_status("", busy=False)
         finally:
-            # Restore Excel UI and calculation settings if we changed them
-            try:
-                if 'app_api' in locals() and app_api is not None and isinstance(_excel_saved, dict):
-                    try:
-                        if _excel_saved.get('ScreenUpdating') is not None:
-                            app_api.ScreenUpdating = _excel_saved.get('ScreenUpdating')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('EnableEvents') is not None:
-                            app_api.EnableEvents = _excel_saved.get('EnableEvents')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('DisplayAlerts') is not None:
-                            app_api.DisplayAlerts = _excel_saved.get('DisplayAlerts')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('Calculation') is not None:
-                            app_api.Calculation = _excel_saved.get('Calculation')
-                    except Exception:
-                        pass
-                    try:
-                        self._log("Restored Excel UI/Calculation settings")
-                    except Exception:
-                        pass
-            except Exception:
-                pass
             # clear status and restore cursor
             self._set_status("", busy=False)
 
@@ -870,36 +680,6 @@ class PeelPotato(QtWidgets.QWidget):
         else:
             self.multi_mode.setEnabled(False)
 
-    def on_help(self):
-        """Show help dialog with usage information loaded from help.html."""
-        try:
-            # Load help.html from the same directory as the script
-            help_path = os.path.join(os.path.dirname(__file__), 'help.html')
-            
-            # Read the HTML content
-            with open(help_path, 'r', encoding='utf-8') as f:
-                help_text = f.read()
-            
-            msg = QtWidgets.QMessageBox(self)
-            msg.setWindowTitle("Help — Peel Potato")
-            msg.setTextFormat(QtCore.Qt.TextFormat.RichText)
-            msg.setText(help_text)
-            msg.setIcon(QtWidgets.QMessageBox.Icon.Information)
-            msg.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
-            
-            # Set font for the message box
-            msg_font = QtGui.QFont("Microsoft YaHei UI", 12)
-            msg.setFont(msg_font)
-            
-            msg.exec()
-        except Exception as e:
-            # Fallback if help.html cannot be loaded
-            QtWidgets.QMessageBox.information(
-                self,
-                "Help — Peel Potato",
-                "Help file not found. Please ensure help.html is in the application directory."
-            )
-    
     def on_change(self):
         # Modify the currently selected chart in Excel
         try:
@@ -945,39 +725,19 @@ class PeelPotato(QtWidgets.QWidget):
                 pass
             
             if selected_chart is None:
-                self._log("No chart selected in Excel.")
                 QtWidgets.QMessageBox.warning(
                     self, 
                     "No chart selected", 
-                    "Please select a chart in Excel to modify, or use Create to create a new one."
+                    "Please select a chart in Excel to modify, or use Create Chart to create a new one."
                 )
                 return
             
-            self._log("Selected chart detected, modifying...")
             # Modify the selected chart
             self.create_chart(preview=False, modify=True)
             
         except Exception as e:
-            self._show_potato_error("Change chart", e)
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to modify chart: {e}")
 
-    def _show_potato_error(self, operation, error):
-        """Show a potato-themed error message."""
-        potato_messages = [
-            "🥔 Oops! The potato got mashed!",
-            "🥔 The potato peeler hit a snag!",
-            "🥔 Potato malfunction detected!",
-            "🥔 The potato needs a moment...",
-            "🥔 Chart potato overcooked!"
-        ]
-        import random
-        title = random.choice(potato_messages)
-        message = f"{operation} encountered an issue:\n\n{str(error)[:200]}"
-        
-        try:
-            QtWidgets.QMessageBox.warning(self, title, message)
-        except Exception:
-            pass
-    
     def _chart_constant_for(self, chart_text, mode_text, _xl):
         # Map chart type + mode to Excel ChartType constant
         ct = chart_text.lower()
@@ -1025,56 +785,10 @@ class PeelPotato(QtWidgets.QWidget):
 
 
 def main():
-    """Main entry point with crash recovery."""
-    max_restarts = 3
-    restart_count = 0
-    
-    while restart_count < max_restarts:
-        try:
-            app = QtWidgets.QApplication(sys.argv)
-            w = PeelPotato()
-            w.show()
-            sys.exit(app.exec())
-        except Exception as e:
-            restart_count += 1
-            print(f"Crash detected (attempt {restart_count}/{max_restarts}): {e}")
-            
-            # Show error dialog if possible
-            try:
-                import random
-                potato_titles = [
-                    "🥔 Potato Emergency!",
-                    "🥔 The Potato Tumbled!",
-                    "🥔 Potato Overload!"
-                ]
-                msg = QtWidgets.QApplication.instance()
-                if msg is None:
-                    msg = QtWidgets.QApplication(sys.argv)
-                
-                error_box = QtWidgets.QMessageBox()
-                error_box.setWindowTitle(random.choice(potato_titles))
-                error_box.setIcon(QtWidgets.QMessageBox.Icon.Warning)
-                error_box.setText(f"Peel Potato encountered an error and will restart.\n\nAttempt {restart_count}/{max_restarts}")
-                error_box.setDetailedText(str(e))
-                error_box.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
-                error_box.exec()
-                
-                # Clean up before restart
-                try:
-                    QtWidgets.QApplication.instance().quit()
-                except Exception:
-                    pass
-            except Exception:
-                pass
-            
-            if restart_count >= max_restarts:
-                print("Max restart attempts reached. Exiting.")
-                break
-            
-            # Brief pause before restart
-            time.sleep(1)
-    
-    sys.exit(1)
+    app = QtWidgets.QApplication(sys.argv)
+    w = PeelPotato()
+    w.show()
+    sys.exit(app.exec())
 
 
 if __name__ == '__main__':
