@@ -4,6 +4,8 @@ import xlwings as xw
 import os
 from PyQt6 import QtWidgets, QtCore, QtGui
 import peel_potato_prettify
+import peel_potato_logic as logic
+from peel_potato_engine import PeelPotatoEngine
 
 try:
     from win32com.client import constants as xlconst
@@ -172,6 +174,11 @@ class PeelPotato(QtWidgets.QWidget):
         
         # Log initial message
         self._log("Peel Potato initialized. Ready to create charts!")
+        # Engine: handles Excel/COM interactions
+        try:
+            self.engine = PeelPotatoEngine()
+        except Exception:
+            self.engine = None
 
     def toggle_log(self):
         """Toggle log board visibility."""
@@ -264,12 +271,21 @@ class PeelPotato(QtWidgets.QWidget):
                 pass
 
     def get_selected_sheet(self):
+        # Delegate selection to engine if available, otherwise fall back to previous behavior
+        try:
+            if self.engine is not None:
+                sh = self.engine.get_selected_sheet()
+                if sh is None:
+                    QtWidgets.QMessageBox.critical(self, "Error", "No Excel instance or workbook found.")
+                return sh
+        except Exception:
+            pass
+        # Fallback: try original method inline (best-effort)
         try:
             app = xw.apps.active
             if app is None:
                 QtWidgets.QMessageBox.critical(self, "Error", "No Excel instance found.")
                 return None
-            # Always use the focused ActiveWorkbook/ActiveSheet
             try:
                 active_wb_api = app.api.ActiveWorkbook
                 active_sh_api = app.api.ActiveSheet
@@ -278,8 +294,6 @@ class PeelPotato(QtWidgets.QWidget):
             except Exception:
                 bname = None
                 sname = None
-
-            # find matching xw Book
             book = None
             if bname:
                 for b in app.books:
@@ -291,7 +305,6 @@ class PeelPotato(QtWidgets.QWidget):
             if book is None:
                 QtWidgets.QMessageBox.critical(self, "Error", "No open workbook found.")
                 return None
-
             try:
                 if sname and sname in [s.name for s in book.sheets]:
                     return book.sheets[sname]
@@ -325,14 +338,11 @@ class PeelPotato(QtWidgets.QWidget):
             pass
 
     def _col_letter_to_index(self, letter):
-        # Convert column letter(s) like 'A' or 'AA' to 1-based index
-        letter = letter.strip().upper()
-        if not letter.isalpha():
+        # Delegate to logic module
+        try:
+            return logic.col_letter_to_index(letter)
+        except Exception:
             return None
-        result = 0
-        for ch in letter:
-            result = result * 26 + (ord(ch) - ord('A') + 1)
-        return result
 
     def _parse_values_input(self, values_text, sheet, ref_rows=None):
         """Return list of xlwings Range objects for values input.
@@ -570,53 +580,22 @@ class PeelPotato(QtWidgets.QWidget):
 
             # COM objects
             sht_api = sheet.api
-            # Optimize Excel during heavy operations to reduce UI blocking and
-            # avoid triggering recalculation while we build chart objects.
+            # Use engine to enter performance mode if available
             app_api = None
             _excel_saved = {}
             try:
-                try:
-                    app_api = sht_api.Application
+                if getattr(self, 'engine', None) is not None:
                     try:
-                        _excel_saved['ScreenUpdating'] = app_api.ScreenUpdating
+                        app_api, _excel_saved = self.engine.begin_performance_mode(sheet)
                     except Exception:
-                        _excel_saved['ScreenUpdating'] = None
-                    try:
-                        _excel_saved['EnableEvents'] = app_api.EnableEvents
-                    except Exception:
-                        _excel_saved['EnableEvents'] = None
-                    try:
-                        _excel_saved['DisplayAlerts'] = app_api.DisplayAlerts
-                    except Exception:
-                        _excel_saved['DisplayAlerts'] = None
-                    try:
-                        _excel_saved['Calculation'] = app_api.Calculation
-                    except Exception:
-                        _excel_saved['Calculation'] = None
-
-                    # Apply safe performance-friendly settings
-                    try:
-                        app_api.ScreenUpdating = False
-                    except Exception:
-                        pass
-                    try:
-                        app_api.EnableEvents = False
-                    except Exception:
-                        pass
-                    try:
-                        app_api.DisplayAlerts = False
-                    except Exception:
-                        pass
-                    try:
-                        manual_calc = getattr(xlconst, 'xlCalculationManual', -4135) if xlconst is not None else -4135
-                        app_api.Calculation = manual_calc
-                    except Exception:
-                        pass
-                    self._log("Temporarily disabled Excel UI updates and set manual calculation for performance")
-                except Exception:
+                        app_api = None
+                        _excel_saved = {}
+                else:
                     app_api = None
+                    _excel_saved = {}
             except Exception:
                 app_api = None
+                _excel_saved = {}
             # place chart at fixed position
             left = 50
             top = 20
@@ -670,7 +649,13 @@ class PeelPotato(QtWidgets.QWidget):
                 ref_rows = (dra.Row, dra.Row + dra.Rows.Count - 1)
 
             self._log(f"Parsing Values input: {values_text}")
-            value_ranges = self._parse_values_input(values_text, sheet, ref_rows=ref_rows)
+            if getattr(self, 'engine', None) is not None:
+                try:
+                    value_ranges = self.engine.parse_values_input(values_text, sheet, ref_rows=ref_rows)
+                except Exception:
+                    value_ranges = self._parse_values_input(values_text, sheet, ref_rows=ref_rows)
+            else:
+                value_ranges = self._parse_values_input(values_text, sheet, ref_rows=ref_rows)
             
             # Log detected value names
             if value_ranges:
@@ -809,31 +794,37 @@ class PeelPotato(QtWidgets.QWidget):
             self._show_potato_error("Chart operation", e)
             self._set_status("", busy=False)
         finally:
-            # Restore Excel UI and calculation settings if we changed them
+            # Restore Excel UI and calculation settings if we changed them.
             try:
-                if 'app_api' in locals() and app_api is not None and isinstance(_excel_saved, dict):
+                if getattr(self, 'engine', None) is not None:
                     try:
-                        if _excel_saved.get('ScreenUpdating') is not None:
-                            app_api.ScreenUpdating = _excel_saved.get('ScreenUpdating')
+                        self.engine.end_performance_mode(app_api, _excel_saved)
                     except Exception:
                         pass
+                else:
+                    # Fallback: restore manually if possible
                     try:
-                        if _excel_saved.get('EnableEvents') is not None:
-                            app_api.EnableEvents = _excel_saved.get('EnableEvents')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('DisplayAlerts') is not None:
-                            app_api.DisplayAlerts = _excel_saved.get('DisplayAlerts')
-                    except Exception:
-                        pass
-                    try:
-                        if _excel_saved.get('Calculation') is not None:
-                            app_api.Calculation = _excel_saved.get('Calculation')
-                    except Exception:
-                        pass
-                    try:
-                        self._log("Restored Excel UI/Calculation settings")
+                        if 'app_api' in locals() and app_api is not None and isinstance(_excel_saved, dict):
+                            try:
+                                if _excel_saved.get('ScreenUpdating') is not None:
+                                    app_api.ScreenUpdating = _excel_saved.get('ScreenUpdating')
+                            except Exception:
+                                pass
+                            try:
+                                if _excel_saved.get('EnableEvents') is not None:
+                                    app_api.EnableEvents = _excel_saved.get('EnableEvents')
+                            except Exception:
+                                pass
+                            try:
+                                if _excel_saved.get('DisplayAlerts') is not None:
+                                    app_api.DisplayAlerts = _excel_saved.get('DisplayAlerts')
+                            except Exception:
+                                pass
+                            try:
+                                if _excel_saved.get('Calculation') is not None:
+                                    app_api.Calculation = _excel_saved.get('Calculation')
+                            except Exception:
+                                pass
                     except Exception:
                         pass
             except Exception:
