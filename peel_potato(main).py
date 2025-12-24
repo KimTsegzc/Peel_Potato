@@ -14,10 +14,6 @@ from peel_potato_parser import RangeParser
 from peel_potato_chart_builder import ChartBuilder
 from peel_potato_controller import ChartController
 
-# Import ST_GZWCM utilities
-from st_gzwcm_autosum import autosum
-from st_gzwcm_autoslc import autoslc
-
 
 class PeelPotatoWindow(QtWidgets.QWidget):
     """Main UI window for Peel Potato - thin UI layer only."""
@@ -125,28 +121,6 @@ class PeelPotatoWindow(QtWidgets.QWidget):
         btn_layout.addWidget(self.change_btn)
         
         layout.addLayout(btn_layout)
-        
-        # AutoSum button (new line)
-        autosum_layout = QtWidgets.QHBoxLayout()
-        autosum_layout.setSpacing(5)
-        autosum_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.autosum_btn = QtWidgets.QPushButton("AutoSum")
-        self.autosum_btn.clicked.connect(self._on_autosum)
-        autosum_layout.addWidget(self.autosum_btn)
-        
-        layout.addLayout(autosum_layout)
-        
-        # AutoSLC button (new line)
-        autoslc_layout = QtWidgets.QHBoxLayout()
-        autoslc_layout.setSpacing(5)
-        autoslc_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.autoslc_btn = QtWidgets.QPushButton("AutoSLC")
-        self.autoslc_btn.clicked.connect(self._on_autoslc)
-        autoslc_layout.addWidget(self.autoslc_btn)
-        
-        layout.addLayout(autoslc_layout)
         
         # Status label
         self.status_label = QtWidgets.QLabel("")
@@ -269,38 +243,6 @@ class PeelPotatoWindow(QtWidgets.QWidget):
             
         except Exception as e:
             self._show_error("Chart Modification", str(e))
-        finally:
-            self._set_status("", busy=False)
-    
-    def _on_autosum(self):
-        """Handle AutoSum button click."""
-        self._set_status("Running AutoSum…", busy=True)
-        self._log("Starting AutoSum operation...")
-        
-        try:
-            result = autosum()
-            self._log(result)
-            self._set_status("AutoSum completed!", busy=False)
-            QtWidgets.QMessageBox.information(self, "AutoSum", result)
-        except Exception as e:
-            self._log(f"✗ AutoSum failed: {str(e)}")
-            self._show_error("AutoSum", str(e))
-        finally:
-            self._set_status("", busy=False)
-    
-    def _on_autoslc(self):
-        """Handle AutoSLC button click."""
-        self._set_status("Running AutoSLC…", busy=True)
-        self._log("Starting AutoSLC operation...")
-        
-        try:
-            result = autoslc()
-            self._log(result)
-            self._set_status("AutoSLC completed!", busy=False)
-            QtWidgets.QMessageBox.information(self, "AutoSLC", result)
-        except Exception as e:
-            self._log(f"✗ AutoSLC failed: {str(e)}")
-            self._show_error("AutoSLC", str(e))
         finally:
             self._set_status("", busy=False)
     
