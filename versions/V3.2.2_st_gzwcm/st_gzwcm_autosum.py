@@ -53,8 +53,10 @@ def load_employee_list():
             df = pd.read_excel(emp_file, sheet_name='emp')
             if 'grp' in df.columns and 'emp' in df.columns:
                 return df[['grp', 'emp']]
+            else:
+                raise Exception(f"emp.xlsx must have 'grp' and 'emp' columns. Found columns: {list(df.columns)}")
         except Exception as e:
-            print(f"Error loading emp.xlsx: {e}")
+            raise Exception(f"Error loading emp.xlsx: {e}")
     
     # Fallback to embedded file (emp_embbed.xlsx in data/ folder)
     if os.path.exists(emp_embbed_file):
@@ -62,9 +64,10 @@ def load_employee_list():
             df = pd.read_excel(emp_embbed_file, sheet_name='emp')
             if 'grp' in df.columns and 'emp' in df.columns:
                 return df[['grp', 'emp']]
+            else:
+                raise Exception(f"emp_embbed.xlsx must have 'grp' and 'emp' columns. Found columns: {list(df.columns)}")
         except Exception as e:
-            print(f"Error loading emp_embbed.xlsx: {e}")
-            raise Exception("Could not load employee list from emp_embbed.xlsx")
+            raise Exception(f"Error loading emp_embbed.xlsx: {e}")
     
     raise Exception(f"Employee list file not found.\nSearched for:\n  User file: {emp_file}\n  Embedded file: {emp_embbed_file}")
 
@@ -111,12 +114,12 @@ def autosum():
         # Try to find employee column (case-insensitive search for common names)
         emp_col = None
         for col in df.columns:
-            if col and str(col).lower() in ['emp', 'employee', 'name', '员工', '员工姓名', '姓名']:
+            if col and str(col).lower() in ['emp', 'usr_nm', 'employee', 'name', '员工', '员工姓名', '姓名']:
                 emp_col = col
                 break
         
         if emp_col is None:
-            raise Exception("Could not find employee column in active sheet. Expected column named 'emp', 'employee', 'name', '员工', or '姓名'")
+            raise Exception("Could not find employee column in active sheet. Expected column named 'emp', 'usr_nm', 'employee', 'name', '员工', '员工姓名', '姓名'")
         
         # Filter data to include only employees in emplist
         filtered_df = df[df[emp_col].isin(emp_names)].copy()
@@ -134,7 +137,7 @@ def autosum():
         # Detect and rename date column
         date_col = None
         for col in filtered_df.columns:
-            if col and str(col).lower() in ['date', 'dt_date', 'dt', 'datetime', '日期', '时间', 'time']:
+            if col and str(col).lower() in ['date', 'data_dt', 'dt_date', 'dt', 'datetime', '日期', '时间', 'time']:
                 date_col = col
                 break
         

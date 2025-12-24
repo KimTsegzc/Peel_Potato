@@ -53,8 +53,10 @@ def load_column_dict():
             df = pd.read_excel(dict_file, sheet_name='dict')
             if 'old' in df.columns and 'new' in df.columns:
                 return df[['old', 'new']]
+            else:
+                raise Exception(f"dict.xlsx must have 'old' and 'new' columns. Found columns: {list(df.columns)}")
         except Exception as e:
-            print(f"Error loading dict.xlsx: {e}")
+            raise Exception(f"Error loading dict.xlsx: {e}")
     
     # Fallback to embedded file (dict_embbed.xlsx in data/ folder)
     if os.path.exists(dict_embbed_file):
@@ -62,9 +64,10 @@ def load_column_dict():
             df = pd.read_excel(dict_embbed_file, sheet_name='dict')
             if 'old' in df.columns and 'new' in df.columns:
                 return df[['old', 'new']]
+            else:
+                raise Exception(f"dict_embbed.xlsx must have 'old' and 'new' columns. Found columns: {list(df.columns)}")
         except Exception as e:
-            print(f"Error loading dict_embbed.xlsx: {e}")
-            raise Exception("Could not load column dictionary from dict_embbed.xlsx")
+            raise Exception(f"Error loading dict_embbed.xlsx: {e}")
     
     raise Exception(f"Column dictionary file not found.\nSearched for:\n  User file: {dict_file}\n  Embedded file: {dict_embbed_file}")
 
@@ -120,7 +123,7 @@ def autoslc():
         # Find and validate employee column first (required)
         emp_col = None
         for col in df.columns:
-            if col and str(col).lower() in ['emp', 'employee', 'name', '员工', '员工姓名', '姓名']:
+            if col and str(col).lower() in ['emp', 'employee', 'usr_nm', 'name', '员工', '员工姓名', '姓名']:
                 emp_col = col
                 break
         
@@ -150,7 +153,7 @@ def autoslc():
         # Detect date column before filtering
         date_col = None
         for col in df.columns:
-            if col and str(col).lower() in ['date', 'dt_date', 'dt', 'datetime', '日期', '时间', 'time']:
+            if col and str(col).lower() in ['date', 'data_dt', 'dt_date', 'dt', 'datetime', '日期', '时间', 'time']:
                 date_col = col
                 break
         
