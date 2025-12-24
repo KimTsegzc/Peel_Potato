@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['peel_potato.py'],
+    ['peel_potato(main).py'],
     pathex=[],
     binaries=[],
     # Include UI/help assets so they are packaged into the EXE directory
@@ -10,14 +10,19 @@ a = Analysis(
         ('media/icon_app.ico', 'media'),
         ('media/icon_exe.ico', 'media'),
         ('media/help.html', 'media'),
-        ('data/emp.xlsx', 'data'),
-        ('data/dict.xlsx', 'data'),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        'PyQt6',
+        'PyQt6.QtCore',
+        'PyQt6.QtGui',
+        'PyQt6.QtWidgets',
+        'win32com',
+        'win32com.client',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['matplotlib', 'scipy', 'IPython', 'jupyter', 'notebook', 'tornado', 'zmq', 'PIL.ImageTk', 'tkinter', 'unittest', 'test', 'tests', 'PyQt5', 'PySide2', 'PySide6'],
     noarchive=False,
     optimize=0,
 )
@@ -32,7 +37,7 @@ exe = EXE(
     name='peel_potato',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
