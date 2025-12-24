@@ -159,8 +159,8 @@ class PeelPotatoWindow(QtWidgets.QWidget):
         try:
             icon_dir = os.path.dirname(__file__)
             candidates = [
-                os.path.join(icon_dir, 'Icon_app.ico'),
-                os.path.join(icon_dir, 'Icon_high_res.ico'),
+                os.path.join(icon_dir, 'media', 'icon_app.ico'),
+                os.path.join(icon_dir, 'media', 'icon_exe.ico'),
             ]
             for icon_path in candidates:
                 if os.path.exists(icon_path):
@@ -286,7 +286,7 @@ class PeelPotatoWindow(QtWidgets.QWidget):
     def _on_help(self):
         """Show help dialog."""
         try:
-            help_path = os.path.join(os.path.dirname(__file__), 'help.html')
+            help_path = os.path.join(os.path.dirname(__file__), 'media', 'help.html')
             if os.path.exists(help_path):
                 with open(help_path, 'r', encoding='utf-8') as f:
                     help_html = f.read()
