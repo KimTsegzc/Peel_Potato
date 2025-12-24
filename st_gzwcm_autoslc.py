@@ -16,7 +16,7 @@ def load_column_dict():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Try dict.xlsx first
-    dict_file = os.path.join(script_dir, 'dict.xlsx')
+    dict_file = os.path.join(script_dir, 'data', 'dict.xlsx')
     if os.path.exists(dict_file):
         try:
             df = pd.read_excel(dict_file, sheet_name='columnlist')
@@ -26,7 +26,7 @@ def load_column_dict():
             print(f"Error loading dict.xlsx: {e}")
     
     # Fallback to dict_embbed.xlsx
-    dict_embbed_file = os.path.join(script_dir, 'dict_embbed.xlsx')
+    dict_embbed_file = os.path.join(script_dir, 'data', 'dict_embbed.xlsx')
     if os.path.exists(dict_embbed_file):
         try:
             df = pd.read_excel(dict_embbed_file, sheet_name='columnlist')

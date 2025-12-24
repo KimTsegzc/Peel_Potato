@@ -16,7 +16,7 @@ def load_employee_list():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Try emp.xlsx first
-    emp_file = os.path.join(script_dir, 'emp.xlsx')
+    emp_file = os.path.join(script_dir, 'data', 'emp.xlsx')
     if os.path.exists(emp_file):
         try:
             df = pd.read_excel(emp_file, sheet_name='emplist')
@@ -26,7 +26,7 @@ def load_employee_list():
             print(f"Error loading emp.xlsx: {e}")
     
     # Fallback to emp_embbed.xlsx
-    emp_embbed_file = os.path.join(script_dir, 'emp_embbed.xlsx')
+    emp_embbed_file = os.path.join(script_dir, 'data', 'emp_embbed.xlsx')
     if os.path.exists(emp_embbed_file):
         try:
             df = pd.read_excel(emp_embbed_file, sheet_name='emplist')

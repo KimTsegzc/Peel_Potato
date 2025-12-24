@@ -7,9 +7,11 @@ a = Analysis(
     binaries=[],
     # Include UI/help assets so they are packaged into the EXE directory
     datas=[
-        ('icon_app.ico', '.'),
-        ('icon_exe.ico', '.'),
-        ('help.html', '.'),
+        ('media/icon_app.ico', 'media'),
+        ('media/icon_exe.ico', 'media'),
+        ('media/help.html', 'media'),
+        ('data/emp.xlsx', 'data'),
+        ('data/dict.xlsx', 'data'),
     ],
     hiddenimports=[],
     hookspath=[],
@@ -40,5 +42,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='Icon_exe.ico',
+    icon='media/icon_exe.ico',
 )
