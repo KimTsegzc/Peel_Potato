@@ -1,11 +1,15 @@
 """
 ST_GZWCM AutoSum - Filter and summarize employees based on employee list.
-Loads emp.xlsx (or emp_embbed.xlsx as fallback) and filters active workbook data.
+Loads emp.xlsx (or emp_embed.xlsx as fallback) and filters active workbook data.
 """
 import os
+import sys
 import re
 import xlwings as xw
 import pandas as pd
+
+# Import shared constants
+from st_gzwcm_constants import EMP_COLUMN_NAMES, DATE_COLUMN_NAMES
 
 
 def sanitize_sheet_name(name, suffix=''):
@@ -33,24 +37,44 @@ def sanitize_sheet_name(name, suffix=''):
     return full_name
 
 
-def load_employee_list():
-    """Load employee list from emp.xlsx or emp_embbed.xlsx.
+def load_employee_list(logger=None):
+    """Load employee list from emp.xlsx or emp_embed.xlsx.
+    
+    Args:
+        logger: Optional callback function to log messages (e.g., for UI)
     
     Returns:
         DataFrame with columns: grp, emp
     """
+    def log(msg):
+        if logger:
+            logger(msg)
+        else:
+            print(msg)
+    
     # Get project root (where this script is located)
     project_root = os.path.dirname(os.path.abspath(__file__))
     
     # User file: emp.xlsx in project root (same dir as .py/.exe)
     emp_file = os.path.join(project_root, 'emp.xlsx')
-    # Embedded file: emp_embbed.xlsx in data/ folder (packed with exe)
-    emp_embbed_file = os.path.join(project_root, 'data', 'emp_embbed.xlsx')
+    
+    # Embedded file: emp_embed.xlsx in data/ folder (packed with exe)
+    # When running as PyInstaller exe, bundled files are in sys._MEIPASS
+    if getattr(sys, 'frozen', False):
+        # Running as compiled exe
+        bundle_dir = sys._MEIPASS
+    else:
+        # Running as script
+        bundle_dir = project_root
+    emp_embed_file = os.path.join(bundle_dir, 'data', 'emp_embed.xlsx')
     
     # Try user file first (emp.xlsx in project root)
     if os.path.exists(emp_file):
+        log(f"[DEBUG] Found emp file: {emp_file}")
         try:
             df = pd.read_excel(emp_file, sheet_name='emp')
+            log(f"[DEBUG] Loaded emp.xlsx successfully. Shape: {df.shape}")
+            log(f"[DEBUG] First 3 rows:\n{df.head(3)}")
             if 'grp' in df.columns and 'emp' in df.columns:
                 return df[['grp', 'emp']]
             else:
@@ -58,22 +82,28 @@ def load_employee_list():
         except Exception as e:
             raise Exception(f"Error loading emp.xlsx: {e}")
     
-    # Fallback to embedded file (emp_embbed.xlsx in data/ folder)
-    if os.path.exists(emp_embbed_file):
+    # Fallback to embedded file (emp_embed.xlsx in data/ folder)
+    if os.path.exists(emp_embed_file):
+        log(f"[DEBUG] Found embedded emp file: {emp_embed_file}")
         try:
-            df = pd.read_excel(emp_embbed_file, sheet_name='emp')
+            df = pd.read_excel(emp_embed_file, sheet_name='emp')
+            log(f"[DEBUG] Loaded emp_embed.xlsx successfully. Shape: {df.shape}")
+            log(f"[DEBUG] First 3 rows:\n{df.head(3)}")
             if 'grp' in df.columns and 'emp' in df.columns:
                 return df[['grp', 'emp']]
             else:
-                raise Exception(f"emp_embbed.xlsx must have 'grp' and 'emp' columns. Found columns: {list(df.columns)}")
+                raise Exception(f"emp_embed.xlsx must have 'grp' and 'emp' columns. Found columns: {list(df.columns)}")
         except Exception as e:
-            raise Exception(f"Error loading emp_embbed.xlsx: {e}")
+            raise Exception(f"Error loading emp_embed.xlsx: {e}")
     
-    raise Exception(f"Employee list file not found.\nSearched for:\n  User file: {emp_file}\n  Embedded file: {emp_embbed_file}")
+    raise Exception(f"Employee list file not found.\nSearched for:\n  User file: {emp_file}\n  Embedded file: {emp_embed_file}")
 
 
-def autosum():
+def autosum(logger=None):
     """Main autosum function.
+    
+    Args:
+        logger: Optional callback function to log messages (e.g., for UI)
     
     Filters active workbook data to include only employees in the emplist,
     and creates a new sheet with the filtered results.
@@ -93,7 +123,7 @@ def autosum():
             raise Exception("No active sheet found")
         
         # Load employee list
-        emplist = load_employee_list()
+        emplist = load_employee_list(logger=logger)
         if emplist.empty:
             raise Exception("Employee list is empty")
         
@@ -114,12 +144,12 @@ def autosum():
         # Try to find employee column (case-insensitive search for common names)
         emp_col = None
         for col in df.columns:
-            if col and str(col).lower() in ['emp', 'usr_nm', 'employee', 'name', '员工', '员工姓名', '姓名']:
+            if col and str(col).lower() in EMP_COLUMN_NAMES:
                 emp_col = col
                 break
         
         if emp_col is None:
-            raise Exception("Could not find employee column in active sheet. Expected column named 'emp', 'usr_nm', 'employee', 'name', '员工', '员工姓名', '姓名'")
+            raise Exception(f"Could not find employee column in active sheet. Expected column named: {', '.join(EMP_COLUMN_NAMES)}")
         
         # Filter data to include only employees in emplist
         filtered_df = df[df[emp_col].isin(emp_names)].copy()
@@ -137,7 +167,7 @@ def autosum():
         # Detect and rename date column
         date_col = None
         for col in filtered_df.columns:
-            if col and str(col).lower() in ['date', 'data_dt', 'dt_date', 'dt', 'datetime', '日期', '时间', 'time']:
+            if col and str(col).lower() in DATE_COLUMN_NAMES:
                 date_col = col
                 break
         

@@ -1,11 +1,15 @@
 """
 ST_GZWCM AutoSLC - Auto Select Columns based on dictionary.
-Loads dict.xlsx (or dict_embbed.xlsx as fallback) and filters/renames columns in active workbook.
+Loads dict.xlsx (or dict_embed.xlsx as fallback) and filters/renames columns in active workbook.
 """
 import os
+import sys
 import re
 import xlwings as xw
 import pandas as pd
+
+# Import shared constants
+from st_gzwcm_constants import EMP_COLUMN_NAMES, DATE_COLUMN_NAMES, GRP_COLUMN_NAMES
 
 
 def sanitize_sheet_name(name, suffix=''):
@@ -33,24 +37,44 @@ def sanitize_sheet_name(name, suffix=''):
     return full_name
 
 
-def load_column_dict():
-    """Load column dictionary from dict.xlsx or dict_embbed.xlsx.
+def load_column_dict(logger=None):
+    """Load column dictionary from dict.xlsx or dict_embed.xlsx.
+    
+    Args:
+        logger: Optional callback function to log messages (e.g., for UI)
     
     Returns:
         DataFrame with columns: old, new
     """
+    def log(msg):
+        if logger:
+            logger(msg)
+        else:
+            print(msg)
+    
     # Get project root (where this script is located)
     project_root = os.path.dirname(os.path.abspath(__file__))
     
     # User file: dict.xlsx in project root (same dir as .py/.exe)
     dict_file = os.path.join(project_root, 'dict.xlsx')
-    # Embedded file: dict_embbed.xlsx in data/ folder (packed with exe)
-    dict_embbed_file = os.path.join(project_root, 'data', 'dict_embbed.xlsx')
+    
+    # Embedded file: dict_embed.xlsx in data/ folder (packed with exe)
+    # When running as PyInstaller exe, bundled files are in sys._MEIPASS
+    if getattr(sys, 'frozen', False):
+        # Running as compiled exe
+        bundle_dir = sys._MEIPASS
+    else:
+        # Running as script
+        bundle_dir = project_root
+    dict_embed_file = os.path.join(bundle_dir, 'data', 'dict_embed.xlsx')
     
     # Try user file first (dict.xlsx in project root)
     if os.path.exists(dict_file):
+        log(f"[DEBUG] Found dict file: {dict_file}")
         try:
             df = pd.read_excel(dict_file, sheet_name='dict')
+            log(f"[DEBUG] Loaded dict.xlsx successfully. Shape: {df.shape}")
+            log(f"[DEBUG] First 3 rows:\n{df.head(3)}")
             if 'old' in df.columns and 'new' in df.columns:
                 return df[['old', 'new']]
             else:
@@ -58,22 +82,28 @@ def load_column_dict():
         except Exception as e:
             raise Exception(f"Error loading dict.xlsx: {e}")
     
-    # Fallback to embedded file (dict_embbed.xlsx in data/ folder)
-    if os.path.exists(dict_embbed_file):
+    # Fallback to embedded file (dict_embed.xlsx in data/ folder)
+    if os.path.exists(dict_embed_file):
+        log(f"[DEBUG] Found embedded dict file: {dict_embed_file}")
         try:
-            df = pd.read_excel(dict_embbed_file, sheet_name='dict')
+            df = pd.read_excel(dict_embed_file, sheet_name='dict')
+            log(f"[DEBUG] Loaded dict_embed.xlsx successfully. Shape: {df.shape}")
+            log(f"[DEBUG] First 3 rows:\n{df.head(3)}")
             if 'old' in df.columns and 'new' in df.columns:
                 return df[['old', 'new']]
             else:
-                raise Exception(f"dict_embbed.xlsx must have 'old' and 'new' columns. Found columns: {list(df.columns)}")
+                raise Exception(f"dict_embed.xlsx must have 'old' and 'new' columns. Found columns: {list(df.columns)}")
         except Exception as e:
-            raise Exception(f"Error loading dict_embbed.xlsx: {e}")
+            raise Exception(f"Error loading dict_embed.xlsx: {e}")
     
-    raise Exception(f"Column dictionary file not found.\nSearched for:\n  User file: {dict_file}\n  Embedded file: {dict_embbed_file}")
+    raise Exception(f"Column dictionary file not found.\nSearched for:\n  User file: {dict_file}\n  Embedded file: {dict_embed_file}")
 
 
-def autoslc():
+def autoslc(logger=None):
     """Main autoslc function.
+    
+    Args:
+        logger: Optional callback function to log messages (e.g., for UI)
     
     Filters active workbook to keep only columns in columnlist (where new is not null),
     and renames them according to the new column names.
@@ -93,7 +123,7 @@ def autoslc():
             raise Exception("No active sheet found")
         
         # Load column dictionary
-        columnlist = load_column_dict()
+        columnlist = load_column_dict(logger=logger)
         if columnlist.empty:
             raise Exception("Column dictionary is empty")
         
@@ -123,12 +153,12 @@ def autoslc():
         # Find and validate employee column first (required)
         emp_col = None
         for col in df.columns:
-            if col and str(col).lower() in ['emp', 'employee', 'usr_nm', 'name', '员工', '员工姓名', '姓名']:
+            if col and str(col).lower() in EMP_COLUMN_NAMES:
                 emp_col = col
                 break
         
         if emp_col is None:
-            raise Exception("Could not find employee column in active sheet. Expected column named 'emp', 'employee', 'name', '员工', or '姓名'")
+            raise Exception(f"Could not find employee column in active sheet. Expected column named: {', '.join(EMP_COLUMN_NAMES)}")
         
         # Find columns to keep (case-insensitive matching)
         columns_to_keep = []
@@ -153,7 +183,7 @@ def autoslc():
         # Detect date column before filtering
         date_col = None
         for col in df.columns:
-            if col and str(col).lower() in ['date', 'data_dt', 'dt_date', 'dt', 'datetime', '日期', '时间', 'time']:
+            if col and str(col).lower() in DATE_COLUMN_NAMES:
                 date_col = col
                 break
         
@@ -188,7 +218,7 @@ def autoslc():
         # Check if grp column exists in source data and include it if present
         grp_col = None
         for col in df.columns:
-            if col and str(col).lower() in ['grp', 'group', 'team', '组', '小组']:
+            if col and str(col).lower() in GRP_COLUMN_NAMES:
                 grp_col = col
                 break
         

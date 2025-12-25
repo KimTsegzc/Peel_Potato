@@ -1,5 +1,6 @@
 """
 Peel Potato V3.2 - FastBI for Excel
+date: 2025/12/25
 Main UI application with clean architecture.
 """
 import sys

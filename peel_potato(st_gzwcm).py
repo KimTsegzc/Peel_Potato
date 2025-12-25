@@ -1,5 +1,5 @@
 """
-Peel Potato V3.2 - FastBI for Excel
+Peel Potato V3.2.3(gzwcm) - FastBI for Excel
 Main UI application with clean architecture.
 """
 import sys
@@ -40,7 +40,7 @@ class PeelPotatoWindow(QtWidgets.QWidget):
     
     def _setup_ui(self):
         """Setup all UI widgets and layout."""
-        self.setWindowTitle("Peel Potato V3.2 — FastBI for Excel")
+        self.setWindowTitle("Peel Potato V3.2.3(gzwcm) — FastBI for Excel")
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
         self.setFixedWidth(420)
         
@@ -278,7 +278,7 @@ class PeelPotatoWindow(QtWidgets.QWidget):
         self._log("Starting AutoSum operation...")
         
         try:
-            result = autosum()
+            result = autosum(logger=self._log)
             self._log(result)
             self._set_status("AutoSum completed!", busy=False)
             QtWidgets.QMessageBox.information(self, "AutoSum", result)
@@ -294,7 +294,7 @@ class PeelPotatoWindow(QtWidgets.QWidget):
         self._log("Starting AutoSLC operation...")
         
         try:
-            result = autoslc()
+            result = autoslc(logger=self._log)
             self._log(result)
             self._set_status("AutoSLC completed!", busy=False)
             QtWidgets.QMessageBox.information(self, "AutoSLC", result)
