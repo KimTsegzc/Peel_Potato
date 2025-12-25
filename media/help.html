@@ -5,56 +5,52 @@
     <style>
         body {
             font-family: 'Microsoft YaHei UI', sans-serif;
-            font-size: 14px;
+            font-size: 13px;
             margin: 0;
-            padding: 15px;
+            padding: 12px;
+            line-height: 1.5;
         }
         h2 {
-            font-family: 'Microsoft YaHei UI', sans-serif;
-            color: #333;
-            margin-top: 0;
+            color: #2c3e50;
+            margin: 0 0 12px 0;
+            font-size: 16px;
         }
         b {
-            color: #d35400;
+            color: #e67e22;
         }
         code {
-            background-color: #f4f4f4;
-            padding: 2px 6px;
-            border-radius: 3px;
+            background-color: #f8f9fa;
+            padding: 1px 5px;
+            border-radius: 2px;
             font-family: 'Consolas', monospace;
+            font-size: 12px;
         }
         .section {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
-    <h2>🥔 Peel Potato — Quick Guide</h2>
+    <h2>🥔 Peel Potato V3.2.6(gzwcm) — Quick Guide</h2>
     
     <div class="section">
-        <p><b>Dim(X):</b> Category axis or X-axis data<br>
-        • Examples: <code>A2:A5</code> or <code>A</code> (auto-detects data range)</p>
+        <p><b>Dim(X):</b> X-axis data — <code>A2:A5</code> or <code>A</code></p>
     </div>
     
     <div class="section">
-        <p><b>Values:</b> Series data for the chart<br>
-        • Single column: <code>B2:B5</code> or <code>B</code><br>
-        • Multiple columns: <code>B,C</code> or <code>B2:B5,C2:C5</code><br>
-        • Cartesian format: <code>(B,C)*(7:10)</code> means columns B,C with rows 7-10<br>
-        • Flexible separators: <code>,</code> for specific items, <code>:</code> for ranges<br>
-        &nbsp;&nbsp;Example: <code>(B:E)*(2:7)</code> = columns B,C,D,E with rows 2-7</p>
+        <p><b>Values:</b> Series data — <code>B</code> or <code>B,C</code><br>
+        • Cartesian: <code>(B:E)*(2:7)</code> = cols B-E, rows 2-7</p>
     </div>
     
     <div class="section">
-        <p><b>Create:</b> Creates a new chart with current settings<br>
-        <b>Change:</b> Modifies the currently selected chart in Excel</p>
+        <p><b>Create:</b> New chart | <b>Change:</b> Update selected chart</p>
     </div>
     
     <div class="section">
-        <p><b>Tips:</b><br>
-        • Select a chart in Excel before clicking "Change"<br>
-        • Charts auto-format with legend on top, data labels, and 12pt font<br>
-        • Use Multi mode to control how multiple data series display</p>
+        <p><b>gzwcm_auto tools:</b><br>
+        • <b>info:</b> Match & enrich employee data from emp.xlsx<br>
+        • <b>slc:</b> Select columns per dict.xlsx, keep defaults<br>
+        • <b>sum:</b> Sum by emp_id, filtered by emp.xlsx, grouped by grp</p>
     </div>
 </body>
 </html>

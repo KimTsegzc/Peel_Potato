@@ -1,5 +1,5 @@
 """
-ST_GZWCM AutoSLC - Auto Select Columns based on dictionary.
+ST_GZWCM SLC - Select Columns based on dictionary.
 Loads dict.xlsx (or dict_embed.xlsx as fallback) and filters/renames columns in active workbook.
 """
 import os
@@ -15,7 +15,7 @@ import xlwings as xw
 import pandas as pd
 
 # Import shared constants
-from st_gzwcm_constants import EMP_COLUMN_NAMES, DATE_COLUMN_NAMES, GRP_COLUMN_NAMES
+from st_gzwcm_constants import EMP_NAME_COLUMN_NAMES, EMP_ID_COLUMN_NAMES, DATE_COLUMN_NAMES, GRP_COLUMN_NAMES
 
 
 def sanitize_sheet_name(name, suffix=''):
@@ -106,8 +106,8 @@ def load_column_dict(logger=None):
     raise Exception(f"Column dictionary file not found.\nSearched for:\n  User file: {dict_file}\n  Embedded file: {dict_embed_file}")
 
 
-def autoslc(logger=None):
-    """Main autoslc function.
+def slc(logger=None):
+    """Main slc function.
     
     Args:
         logger: Optional callback function to log messages (e.g., for UI)
@@ -162,21 +162,48 @@ def autoslc(logger=None):
         else:
             df = pd.DataFrame(columns=data[0])
         
-        # Find and validate employee column first (required)
-        emp_col = None
+        # Find default columns (date, grp, emp_id, emp_nm)
+        date_col = None
+        grp_col = None
+        emp_id_col = None
+        emp_nm_col = None
+        
         for col in df.columns:
-            if col and str(col).lower() in EMP_COLUMN_NAMES:
-                emp_col = col
-                break
+            if col:
+                col_lower = str(col).lower()
+                if not date_col and col_lower in [c.lower() for c in DATE_COLUMN_NAMES]:
+                    date_col = col
+                if not grp_col and col_lower in [c.lower() for c in GRP_COLUMN_NAMES]:
+                    grp_col = col
+                if not emp_id_col and col_lower in [c.lower() for c in EMP_ID_COLUMN_NAMES]:
+                    emp_id_col = col
+                if not emp_nm_col and col_lower in [c.lower() for c in EMP_NAME_COLUMN_NAMES]:
+                    emp_nm_col = col
         
-        if emp_col is None:
-            raise Exception(f"Could not find employee column in active sheet. Expected column named: {', '.join(EMP_COLUMN_NAMES)}")
+        # At least emp_nm or emp_id must exist
+        if not emp_nm_col and not emp_id_col:
+            raise Exception(f"Could not find employee column in active sheet. Expected emp_nm or emp_id column")
         
-        # Find columns to keep (case-insensitive matching)
+        # Start with default columns that exist
+        default_columns = []
+        if date_col:
+            default_columns.append(date_col)
+        if grp_col:
+            default_columns.append(grp_col)
+        if emp_id_col:
+            default_columns.append(emp_id_col)
+        if emp_nm_col:
+            default_columns.append(emp_nm_col)
+        
+        # Find columns to keep from dict (case-insensitive matching)
         columns_to_keep = []
         rename_map = {}
         
         for old_col_name in columnlist['old']:
+            # Skip if this is a default column
+            if old_col_name in default_columns:
+                continue
+            
             # Try exact match first
             if old_col_name in df.columns:
                 columns_to_keep.append(old_col_name)
@@ -185,82 +212,54 @@ def autoslc(logger=None):
                 # Try case-insensitive match
                 for col in df.columns:
                     if col and str(col).lower() == str(old_col_name).lower():
-                        columns_to_keep.append(col)
-                        rename_map[col] = col_mapping[old_col_name]
+                        # Don't include if it's a default column
+                        if col not in default_columns:
+                            columns_to_keep.append(col)
+                            rename_map[col] = col_mapping[old_col_name]
                         break
         
-        if not columns_to_keep:
-            raise Exception("No matching columns found in active sheet")
+        # Combine default columns with dict columns
+        all_columns = default_columns + columns_to_keep
         
-        # Detect date column before filtering
-        date_col = None
-        for col in df.columns:
-            if col and str(col).lower() in DATE_COLUMN_NAMES:
-                date_col = col
-                break
+        # Filter to keep only selected columns
+        filtered_df = df[all_columns].copy()
         
-        # Always include date and emp columns if they exist and aren't already included
-        if date_col and date_col not in columns_to_keep:
-            columns_to_keep.insert(0, date_col)
-        # emp_col is guaranteed to exist (validated earlier), include it if not already there
-        if emp_col not in columns_to_keep:
-            columns_to_keep.insert(0, emp_col)
-        
-        # Filter columns
-        filtered_df = df[columns_to_keep].copy()
-        
-        # Rename columns according to mapping
+        # Rename columns from dict according to mapping
         filtered_df = filtered_df.rename(columns=rename_map)
         
-        # Rename date column to dt_date
-        if date_col:
-            # Check if date_col was renamed or is still original
-            if date_col in filtered_df.columns:
-                filtered_df = filtered_df.rename(columns={date_col: 'dt_date'})
-            elif date_col in rename_map and rename_map[date_col] in filtered_df.columns:
-                filtered_df = filtered_df.rename(columns={rename_map[date_col]: 'dt_date'})
+        # Standardize default column names
+        default_rename = {}
+        if date_col and date_col in filtered_df.columns:
+            default_rename[date_col] = 'data_dt'
+        if grp_col and grp_col in filtered_df.columns:
+            default_rename[grp_col] = 'grp'
+        if emp_id_col and emp_id_col in filtered_df.columns:
+            default_rename[emp_id_col] = 'emp_id'
+        if emp_nm_col and emp_nm_col in filtered_df.columns:
+            default_rename[emp_nm_col] = 'emp_nm'
         
-        # Rename emp column to 'emp' for consistency (emp_col is guaranteed to exist)
-        emp_renamed = rename_map.get(emp_col, emp_col)
-        if emp_renamed != 'emp' and emp_renamed in filtered_df.columns:
-            filtered_df = filtered_df.rename(columns={emp_renamed: 'emp'})
-        elif emp_col != 'emp' and emp_col in filtered_df.columns:
-            filtered_df = filtered_df.rename(columns={emp_col: 'emp'})
+        filtered_df = filtered_df.rename(columns=default_rename)
         
-        # Check if grp column exists in source data and include it if present
-        grp_col = None
-        for col in df.columns:
-            if col and str(col).lower() in GRP_COLUMN_NAMES:
-                grp_col = col
-                break
+        # Keep emp_id as string without padding - just remove .0 suffix if present
+        if 'emp_id' in filtered_df.columns:
+            filtered_df['emp_id'] = filtered_df['emp_id'].fillna('').astype(str).str.replace('.0', '', regex=False)
         
-        if grp_col and grp_col not in columns_to_keep:
-            # Add grp column from source data (don't merge from emp.xlsx)
-            if 'dt_date' in filtered_df.columns:
-                grp_pos = list(filtered_df.columns).index('dt_date') + 1
-            else:
-                grp_pos = 0
-            filtered_df.insert(grp_pos, 'grp', df[grp_col])
-        elif grp_col and grp_col in columns_to_keep:
-            # Rename grp column to 'grp' if it exists but has different name
-            grp_renamed = rename_map.get(grp_col, grp_col)
-            if grp_renamed != 'grp' and grp_renamed in filtered_df.columns:
-                filtered_df = filtered_df.rename(columns={grp_renamed: 'grp'})
-        
-        # Reorder columns to ensure dt_date, grp, emp order
+        # Reorder columns to ensure data_dt, grp, emp_id, emp_nm order
         priority_cols = []
-        if 'dt_date' in filtered_df.columns:
-            priority_cols.append('dt_date')
+        if 'data_dt' in filtered_df.columns:
+            priority_cols.append('data_dt')
         if 'grp' in filtered_df.columns:
             priority_cols.append('grp')
-        if 'emp' in filtered_df.columns:
-            priority_cols.append('emp')
+        if 'emp_id' in filtered_df.columns:
+            priority_cols.append('emp_id')
+        if 'emp_nm' in filtered_df.columns:
+            priority_cols.append('emp_nm')
         
         other_cols = [c for c in filtered_df.columns if c not in priority_cols]
         filtered_df = filtered_df[priority_cols + other_cols]
         
         # Create new sheet with filtered and renamed data
-        new_sheet_name = 'autoslc'
+        new_sheet_name = 'slc'
         
         # Remove existing sheet with the same name if it exists
         try:
@@ -272,10 +271,24 @@ def autoslc(logger=None):
         # Create new sheet
         new_sheet = wb.sheets.add(name=new_sheet_name, after=sheet)
         
-        # Write filtered data with new column names
+        # Write headers
         new_sheet.range('A1').value = filtered_df.columns.tolist()
+        
+        # Pre-format emp_id column as text before writing data
+        if not filtered_df.empty and 'emp_id' in filtered_df.columns:
+            emp_id_col_idx = filtered_df.columns.tolist().index('emp_id') + 1  # 1-based
+            emp_id_col_letter = chr(64 + emp_id_col_idx) if emp_id_col_idx <= 26 else 'A' + chr(64 + emp_id_col_idx - 26)
+            last_row = len(filtered_df) + 1
+            emp_id_range = new_sheet.range(f'{emp_id_col_letter}2:{emp_id_col_letter}{last_row}')
+            emp_id_range.number_format = '@'  # Set as text format
+        
+        # Write filtered data with new column names
         if not filtered_df.empty:
-            new_sheet.range('A2').value = filtered_df.values.tolist()
+            # Convert to list of lists to preserve string types
+            data_to_write = []
+            for _, row in filtered_df.iterrows():
+                data_to_write.append(row.tolist())
+            new_sheet.range('A2').value = data_to_write
         
         # Auto-fit columns
         new_sheet.autofit()
@@ -283,7 +296,7 @@ def autoslc(logger=None):
         return f"✓ Created sheet '{new_sheet_name}' with {len(filtered_df.columns)} selected columns"
         
     except Exception as e:
-        raise Exception(f"AutoSLC failed: {str(e)}")
+        raise Exception(f"SLC failed: {str(e)}")
     finally:
         # Cleanup COM for frozen exe
         if getattr(sys, 'frozen', False):
@@ -294,7 +307,7 @@ def autoslc(logger=None):
 if __name__ == '__main__':
     """For testing purposes."""
     try:
-        result = autoslc()
+        result = slc()
         print(result)
     except Exception as e:
         print(f"Error: {e}")

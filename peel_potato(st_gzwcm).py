@@ -1,7 +1,23 @@
 """
-Peel Potato V3.2.3(gzwcm) - FastBI for Excel
-Main UI application with clean architecture.
+Peel Potato V3.2.6(gzwcm) - FastBI for Excel
+
+Version: V3.2.6 (gzwcm batch)
+Purpose: Excel data processing and chart creation tool with specialized gzwcm utilities
+Features:
+  - FastBI charting: Quick chart creation/modification with intuitive range syntax
+  - gzwcm_auto tools:
+    * info: Match and enrich employee data from emp.xlsx by emp_nm or emp_id
+    * slc: Select columns per dict.xlsx mapping, keep default columns (data_dt, grp, emp_id, emp_nm)
+    * sum: Filter by emp.xlsx (emp_nm), sum by emp_id, group by grp with totals
+Architecture: 
+  - Modular design with separate controller, parser, builder, and adapter layers
+  - String-based emp_id formatting (8-digit with leading zeros)
+  - Pre-formatted Excel text columns to preserve emp_id integrity
 """
+# Version and batch information
+VERSION = "V3.2.6"
+BATCH = "gzwcm"
+
 import sys
 import os
 import datetime
@@ -15,14 +31,15 @@ from peel_potato_chart_builder import ChartBuilder
 from peel_potato_controller import ChartController
 
 # Import ST_GZWCM utilities
-from st_gzwcm_autosum import autosum
-from st_gzwcm_autoslc import autoslc
+from st_gzwcm_info import info
+from st_gzwcm_sum import sum as gzwcm_sum
+from st_gzwcm_slc import slc
 
 
 class PeelPotatoWindow(QtWidgets.QWidget):
     """Main UI window for Peel Potato - thin UI layer only."""
     
-    def __init__(self):
+    def __init__(self): 
         super().__init__()
         
         # Initialize controller with services (Dependency Injection)
@@ -36,11 +53,11 @@ class PeelPotatoWindow(QtWidgets.QWidget):
         self._setup_polling()
         
         # Log initial message
-        self._log("Peel Potato V3.2 initialized. Ready to create charts!")
+        self._log(f"Peel Potato {VERSION}({BATCH}) initialized. Ready to create charts!")
     
     def _setup_ui(self):
         """Setup all UI widgets and layout."""
-        self.setWindowTitle("Peel Potato V3.2.3(gzwcm) — FastBI for Excel")
+        self.setWindowTitle(f"Peel Potato {VERSION}({BATCH}) — FastBI for Excel")
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.WindowStaysOnTopHint)
         self.setFixedWidth(420)
         
@@ -126,27 +143,35 @@ class PeelPotatoWindow(QtWidgets.QWidget):
         
         layout.addLayout(btn_layout)
         
-        # AutoSLC button (new line)
-        autoslc_layout = QtWidgets.QHBoxLayout()
-        autoslc_layout.setSpacing(5)
-        autoslc_layout.setContentsMargins(0, 0, 0, 0)
+        # GZWCM Auto Tools section
+        gzwcm_label = QtWidgets.QLabel("<b>gzwcm_auto tools</b>")
+        gzwcm_label.setStyleSheet("color: #2980b9; font-size: 11pt;")
+        gzwcm_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(gzwcm_label)
         
-        self.autoslc_btn = QtWidgets.QPushButton("gzw_autoslc")
-        self.autoslc_btn.clicked.connect(self._on_autoslc)
-        autoslc_layout.addWidget(self.autoslc_btn)
+        # 4 buttons in one line: info, slc, sum, cat
+        gzwcm_btn_layout = QtWidgets.QHBoxLayout()
+        gzwcm_btn_layout.setSpacing(5)
+        gzwcm_btn_layout.setContentsMargins(0, 0, 0, 0)
         
-        layout.addLayout(autoslc_layout)
+        self.info_btn = QtWidgets.QPushButton("info")
+        self.info_btn.clicked.connect(self._on_info)
+        gzwcm_btn_layout.addWidget(self.info_btn)
         
-        # AutoSum button (new line)
-        autosum_layout = QtWidgets.QHBoxLayout()
-        autosum_layout.setSpacing(5)
-        autosum_layout.setContentsMargins(0, 0, 0, 0)
+        self.slc_btn = QtWidgets.QPushButton("slc")
+        self.slc_btn.clicked.connect(self._on_slc)
+        gzwcm_btn_layout.addWidget(self.slc_btn)
         
-        self.autosum_btn = QtWidgets.QPushButton("gzw_autosum")
-        self.autosum_btn.clicked.connect(self._on_autosum)
-        autosum_layout.addWidget(self.autosum_btn)
+        self.sum_btn = QtWidgets.QPushButton("sum")
+        self.sum_btn.clicked.connect(self._on_sum)
+        gzwcm_btn_layout.addWidget(self.sum_btn)
         
-        layout.addLayout(autosum_layout)
+        self.cat_btn = QtWidgets.QPushButton("cat")
+        self.cat_btn.clicked.connect(self._on_cat)
+        self.cat_btn.setEnabled(False)  # TODO: Implement cat functionality
+        gzwcm_btn_layout.addWidget(self.cat_btn)
+        
+        layout.addLayout(gzwcm_btn_layout)
         
         # Status label
         self.status_label = QtWidgets.QLabel("")
@@ -272,35 +297,68 @@ class PeelPotatoWindow(QtWidgets.QWidget):
         finally:
             self._set_status("", busy=False)
     
-    def _on_autosum(self):
-        """Handle AutoSum button click."""
-        self._set_status("Running AutoSum…", busy=True)
-        self._log("Starting AutoSum operation...")
+    def _on_sum(self):
+        """Handle Sum button click."""
+        self._set_status("Running Sum…", busy=True)
+        self._log("Starting Sum operation...")
         
         try:
-            result = autosum(logger=self._log)
+            result = gzwcm_sum(logger=self._log)
             self._log(result)
-            self._set_status("AutoSum completed!", busy=False)
-            QtWidgets.QMessageBox.information(self, "AutoSum", result)
+            self._set_status("Sum completed!", busy=False)
+            QtWidgets.QMessageBox.information(self, "Sum", result)
         except Exception as e:
-            self._log(f"✗ AutoSum failed: {str(e)}")
-            self._show_error("AutoSum", str(e))
+            self._log(f"✗ Sum failed: {str(e)}")
+            self._show_error("Sum", str(e))
         finally:
             self._set_status("", busy=False)
     
-    def _on_autoslc(self):
-        """Handle AutoSLC button click."""
-        self._set_status("Running AutoSLC…", busy=True)
-        self._log("Starting AutoSLC operation...")
+    def _on_slc(self):
+        """Handle SLC button click."""
+        self._set_status("Running SLC…", busy=True)
+        self._log("Starting SLC operation...")
         
         try:
-            result = autoslc(logger=self._log)
+            result = slc(logger=self._log)
             self._log(result)
-            self._set_status("AutoSLC completed!", busy=False)
-            QtWidgets.QMessageBox.information(self, "AutoSLC", result)
+            self._set_status("SLC completed!", busy=False)
+            QtWidgets.QMessageBox.information(self, "SLC", result)
         except Exception as e:
-            self._log(f"✗ AutoSLC failed: {str(e)}")
-            self._show_error("AutoSLC", str(e))
+            self._log(f"✗ SLC failed: {str(e)}")
+            self._show_error("SLC", str(e))
+        finally:
+            self._set_status("", busy=False)
+    
+    def _on_info(self):
+        """Handle Info button click."""
+        self._set_status("Running Info…", busy=True)
+        self._log("Starting Info operation...")
+        
+        try:
+            result = info(logger=self._log)
+            self._log(result)
+            self._set_status("Info completed!", busy=False)
+            QtWidgets.QMessageBox.information(self, "Info", result)
+        except Exception as e:
+            self._log(f"✗ Info failed: {str(e)}")
+            self._show_error("Info", str(e))
+        finally:
+            self._set_status("", busy=False)
+    
+    def _on_cat(self):
+        """Handle Cat button click."""
+        self._set_status("Running Cat…", busy=True)
+        self._log("Starting Cat operation...")
+        
+        try:
+            # TODO: Implement cat functionality
+            result = "Cat functionality not yet implemented"
+            self._log(result)
+            self._set_status("Cat completed!", busy=False)
+            QtWidgets.QMessageBox.information(self, "Cat", result)
+        except Exception as e:
+            self._log(f"✗ Cat failed: {str(e)}")
+            self._show_error("Cat", str(e))
         finally:
             self._set_status("", busy=False)
     
