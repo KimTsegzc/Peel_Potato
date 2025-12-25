@@ -2,17 +2,10 @@
 
 
 a = Analysis(
-    ['peel_potato(st_gzwcm).py'],
+    ['peel_potato(V1.0.1217).py'],
     pathex=[],
     binaries=[],
-    # Include UI/help assets so they are packaged into the EXE directory
-    datas=[
-        ('media/icon_app.ico', 'media'),
-        ('media/icon_exe.ico', 'media'),
-        ('media/help_st_gzwcm.html', 'media'),
-        ('data/emp_embed.xlsx', 'data'),
-        ('data/dict_embed.xlsx', 'data'),
-    ],
+    datas=[],
     hiddenimports=['PyQt6', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets'],
     hookspath=[],
     hooksconfig={},
@@ -33,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='peel_potato(gzw_V3.2.3)',
+    name='peel_potato(V1.0)',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -46,5 +39,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='media/icon_exe.ico',
 )

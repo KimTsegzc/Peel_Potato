@@ -2,26 +2,27 @@
 
 
 a = Analysis(
-    ['peel_potato(st_gzwcm).py'],
+    ['peel_potato(main).py'],
     pathex=[],
     binaries=[],
     # Include UI/help assets so they are packaged into the EXE directory
     datas=[
         ('media/icon_app.ico', 'media'),
         ('media/icon_exe.ico', 'media'),
-        ('media/help_st_gzwcm.html', 'media'),
-        ('data/emp_embed.xlsx', 'data'),
-        ('data/dict_embed.xlsx', 'data'),
+        ('media/help.html', 'media'),
     ],
-    hiddenimports=['PyQt6', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets'],
+    hiddenimports=[
+        'PyQt6',
+        'PyQt6.QtCore',
+        'PyQt6.QtGui',
+        'PyQt6.QtWidgets',
+        'win32com',
+        'win32com.client',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        'matplotlib', 'scipy', 'IPython', 'jupyter', 'notebook',
-        'tornado', 'zmq', 'PIL.ImageTk', 'tkinter', 'unittest',
-        'test', 'tests', 'PyQt5', 'PySide2', 'PySide6'
-    ],
+    excludes=['matplotlib', 'scipy', 'IPython', 'jupyter', 'notebook', 'tornado', 'zmq', 'PIL.ImageTk', 'tkinter', 'unittest', 'test', 'tests', 'PyQt5', 'PySide2', 'PySide6'],
     noarchive=False,
     optimize=0,
 )
@@ -33,10 +34,10 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='peel_potato(gzw_V3.2.3)',
+    name='peel_potato',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
